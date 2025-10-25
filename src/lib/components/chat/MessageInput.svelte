@@ -543,7 +543,7 @@
 			size: file.size,
 			error: '',
 			itemId: tempItemId,
-			...(fullContext ? { context: 'full' } : {})
+			context: 'full'
 		};
 
 		if (fileItem.size == 0) {
