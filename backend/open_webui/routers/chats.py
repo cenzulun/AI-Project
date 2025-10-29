@@ -21,8 +21,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 
+import os
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
+from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.task import get_task_model_id, title_generation_template
+from open_webui.config import UPLOAD_DIR
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -399,6 +403,82 @@ async def get_shared_chat_by_id(share_id: str, user=Depends(get_verified_user)):
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+
+############################
+# SummarizeChatById
+############################
+
+
+@router.post("/{id}/summarize", response_model=Optional[bool])
+async def summarize_chat_by_id(
+    id: str, request: Request, user=Depends(get_verified_user)
+):
+    chat = Chats.get_chat_by_id_and_user_id(id, user.id)
+
+    if not chat:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    try:
+        models = request.app.state.MODELS
+        task_model_id = get_task_model_id(
+            user.model,
+            request.app.state.config.TASK_MODEL.value,
+            request.app.state.config.TASK_MODEL_EXTERNAL.value,
+            models,
+        )
+
+        if not task_model_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Task model not found",
+            )
+
+        messages = chat.chat["messages"]
+
+        # Prepare the summarization prompt
+        summarization_prompt = title_generation_template(
+            "### Task:\nSummarize the following conversation in a concise and informative way. Extract key points, decisions, and action items. The summary should be suitable for long-term storage and retrieval as a knowledge base document.\n\n### Chat History:\n<chat_history>\n{{MESSAGES}}\n</chat_history>\n\n### Summary:",
+            messages,
+        )
+
+        form_data = {
+            "model": task_model_id,
+            "messages": [
+                {"role": "user", "content": summarization_prompt},
+            ],
+            "stream": False,
+        }
+
+        # Generate the summary
+        summary_response = await generate_chat_completion(
+            request, form_data, user, bypass_filter=True
+        )
+
+        summary_text = summary_response["choices"][0]["message"]["content"]
+
+        # Save the summary to a file
+        user_docs_dir = UPLOAD_DIR / str(user.id) / "docs"
+        user_docs_dir.mkdir(parents=True, exist_ok=True)
+
+        sanitized_title = "".join(
+            c for c in chat.title if c.isalnum() or c in (" ", "-", "_")
+        ).rstrip()
+        summary_filename = f"{sanitized_title}_summary.txt"
+        summary_filepath = user_docs_dir / summary_filename
+
+        with open(summary_filepath, "w", encoding="utf-8") as f:
+            f.write(summary_text)
+
+        return True
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ERROR_MESSAGES.DEFAULT(),
         )
 
 
