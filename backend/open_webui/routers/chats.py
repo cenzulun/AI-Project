@@ -424,17 +424,17 @@ async def summarize_chat_by_id(
 
     try:
         models = request.app.state.MODELS
-        task_model_id = get_task_model_id(
-            user.model,
-            request.app.state.config.TASK_MODEL.value,
-            request.app.state.config.TASK_MODEL_EXTERNAL.value,
-            models,
+        # Directly use the task model from config, as user.model is not reliable
+        task_model_id = (
+            request.app.state.config.TASK_MODEL.value
+            if request.app.state.config.TASK_MODEL.value in models
+            else request.app.state.config.TASK_MODEL_EXTERNAL.value
         )
 
-        if not task_model_id:
+        if not task_model_id or task_model_id not in models:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Task model not found",
+                detail=f"Task model '{task_model_id}' not found or is not available.",
             )
 
         messages = chat.chat["messages"]
@@ -478,7 +478,7 @@ async def summarize_chat_by_id(
         log.exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ERROR_MESSAGES.DEFAULT(),
+            detail=f"Failed to summarize chat: {e}",
         )
 
 
