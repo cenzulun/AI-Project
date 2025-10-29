@@ -22,7 +22,7 @@
 		showEmbeds
 	} from '$lib/stores';
 	import { flyAndScale } from '$lib/utils/transitions';
-	import { getChatById } from '$lib/apis/chats';
+	import { getChatById, summarizeChatById } from '$lib/apis/chats';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tags from '$lib/components/chat/Tags.svelte';
@@ -470,6 +470,28 @@
 				>
 					<ArchiveBox className="size-4" strokeWidth="1.5" />
 					<div class="flex items-center">{$i18n.t('Archive')}</div>
+				</DropdownMenu.Item>
+
+				<DropdownMenu.Item
+					class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
+					on:click={async () => {
+						const res = await summarizeChatById(localStorage.token, chat.id);
+						if (res) {
+							toast.success(
+								$i18n.t(
+									"The previous conversation has been summarized. In a new chat, you can reference '{chat_title}' to continue using its content!",
+									{
+										chat_title: chat.title
+									}
+								)
+							);
+						} else {
+							toast.error($i18n.t('Failed to archive chat memory.'));
+						}
+					}}
+				>
+					<ArchiveBox className="size-4" strokeWidth="1.5" />
+					<div class="flex items-center">{$i18n.t('Archive Memory')}</div>
 				</DropdownMenu.Item>
 
 				<hr class="border-gray-50 dark:border-gray-800 my-1" />

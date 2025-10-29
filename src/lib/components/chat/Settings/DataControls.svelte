@@ -17,8 +17,7 @@
 		getAllChats,
 		getChatList,
 		importChat,
-		getPinnedChatList,
-		summarizeChatById
+		getPinnedChatList
 	} from '$lib/apis/chats';
 	import { getImportOrigin, convertOpenAIChats } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
@@ -153,7 +152,7 @@
 					>
 						<path
 							fill-rule="evenodd"
-							d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 9.5a.75.75 0 0 1-.75-.75V8.06l-.72.72a.75.75 0 0 1-1.06-1.06l2-2a.75.75 0 0 1 1.06 0l2 2a.75.75 0 1 1-1.06 1.06l-.72-.72v2.69a.75.75 0 0 1-.75.75Z"
+							d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 9.5a.75.75 0 0 1-.75-.75V8.06l-.72.72a.75.75 0 0 1-1.06-1.06l2-2a.75.75 0 0 1 1.06 0l2 2a.75.75 0 1 1-1.06 1.06l-.72-.72v2.69a.75.75 0 0 1-.75-.75Z"
 							clip-rule="evenodd"
 						/>
 					</svg>
@@ -185,42 +184,6 @@
 					<div class=" self-center text-sm font-medium">{$i18n.t('Export Chats')}</div>
 				</button>
 			{/if}
-
-			<button
-				class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
-				on:click={async () => {
-					const chatId = $chats.find((chat) => chat.active)?.id;
-					if (chatId) {
-						const res = await summarizeChatById(localStorage.token, chatId);
-						if (res) {
-							toast.success($i18n.t('Chat memory archived successfully!'));
-						} else {
-							toast.error($i18n.t('Failed to archive chat memory.'));
-						}
-					} else {
-						toast.error($i18n.t('No active chat selected.'));
-					}
-				}}
-			>
-				<div class=" self-center mr-3">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="currentColor"
-						class="size-4"
-					>
-						<path
-							d="M3.375 3C2.339 3 1.5 3.84 1.5 4.875v.75c0 1.036.84 1.875 1.875 1.875h17.25c1.035 0 1.875-.84 1.875-1.875v-.75C22.5 3.839 21.66 3 20.625 3H3.375Z"
-						/>
-						<path
-							fill-rule="evenodd"
-							d="m3.087 9 .54 9.176A3 3 0 0 0 6.62 21h10.757a3 3 0 0 0 2.995-2.824L20.913 9H3.087Zm6.163 3.75A.75.75 0 0 1 10 12h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75Z"
-							clip-rule="evenodd"
-						/>
-					</svg>
-				</div>
-				<div class=" self-center text-sm font-medium">{$i18n.t('Archive Memory')}</div>
-			</button>
 		</div>
 
 		<hr class=" border-gray-100 dark:border-gray-850" />
