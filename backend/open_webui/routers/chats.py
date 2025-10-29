@@ -13,6 +13,7 @@ from open_webui.models.chats import (
 )
 from open_webui.models.tags import TagModel, Tags
 from open_webui.models.folders import Folders
+from open_webui.models.knowledge import Knowledges, KnowledgeForm
 
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
@@ -460,7 +461,20 @@ async def summarize_chat_by_id(
 
         summary_text = summary_response["choices"][0]["message"]["content"]
 
-        # Save the summary to a file
+        # Create a new knowledge base
+        knowledge_form = KnowledgeForm(
+            name=chat.title,
+            description=f"Summary of chat '{chat.title}'",
+        )
+        knowledge_base = Knowledges.insert_new_knowledge(user.id, knowledge_form)
+
+        if not knowledge_base:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create knowledge base.",
+            )
+
+        # Save the summary to a file and add it to the knowledge base
         user_docs_dir = UPLOAD_DIR / str(user.id) / "docs"
         user_docs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -472,6 +486,23 @@ async def summarize_chat_by_id(
 
         with open(summary_filepath, "w", encoding="utf-8") as f:
             f.write(summary_text)
+
+        # Create a new document
+        from open_webui.routers.documents import (
+            create_document_from_file,
+            add_document_to_knowledge_base,
+        )
+
+        doc = create_document_from_file(
+            user, summary_filename, summary_filepath, "text/plain"
+        )
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create document from summary.",
+            )
+
+        add_document_to_knowledge_base(knowledge_base.id, doc.id, user)
 
         return True
     except Exception as e:
