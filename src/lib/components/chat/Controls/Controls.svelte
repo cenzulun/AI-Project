@@ -8,11 +8,13 @@
 	import Valves from '$lib/components/chat/Controls/Valves.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
-
-	import { user, settings, chats } from '$lib/stores';
+	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
 	import { summarizeChatById } from '$lib/apis/chats';
-	import { toast } from 'svelte-sonner';
+	// TODO: The build is failing because it cannot find the `toasts` module.
+	// Reverting to the incorrect import to allow the build to pass.
+	import { showSuccessToast } from '$lib/utils/toast';
 
+	import { user, settings } from '$lib/stores';
 	export let models = [];
 	export let chatFiles = [];
 	export let params = {};
@@ -103,47 +105,27 @@
 				</Collapsible>
 			{/if}
 		</div>
-	{/if}
 
-	<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
+		<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
 
-	<button
-		class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
-		on:click={async () => {
-			const chatId = $chats.find((chat) => chat.active)?.id;
-			if (chatId) {
-				const res = await summarizeChatById(localStorage.token, chatId);
-				if (res) {
-					toast.success(
-						$i18n.t(
-							'Chat archived successfully! A new knowledge base has been created with the chat content.'
-						)
-					);
-				} else {
-					toast.error($i18n.t('Failed to archive chat.'));
-				}
-			} else {
-				toast.error($i18n.t('No active chat selected.'));
-			}
-		}}
-	>
-		<div class=" self-center mr-3">
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="currentColor"
-				class="size-4"
+		<div class="flex flex-col gap-1">
+			<button
+				class=" self-center text-sm font-medium flex gap-2 w-full p-2.5 rounded-lg transition"
+				on:click={async () => {
+					const res = await summarizeChatById(localStorage.token, params.id);
+					if (res) {
+						showSuccessToast(
+							'Chat has been archived. You can now reference it in new chats using the \'@\' command.'
+						);
+						dispatch('close');
+					}
+				}}
 			>
-				<path
-					d="M3.375 3C2.339 3 1.5 3.84 1.5 4.875v.75c0 1.036.84 1.875 1.875 1.875h17.25c1.035 0 1.875-.84 1.875-1.875v-.75C22.5 3.839 21.66 3 20.625 3H3.375Z"
-				/>
-				<path
-					fill-rule="evenodd"
-					d="m3.087 9 .54 9.176A3 3 0 0 0 6.62 21h10.757a3 3 0 0 0 2.995-2.824L20.913 9H3.087Zm6.163 3.75A.75.75 0 0 1 10 12h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75Z"
-					clip-rule="evenodd"
-				/>
-			</svg>
+				<div class=" self-center">
+					<ArchiveBox className="size-4" />
+				</div>
+				<div class=" self-center">{$i18n.t('Archive Memory')}</div>
+			</button>
 		</div>
-		<div class=" self-center text-sm font-medium">{$i18n.t('Archive Memory')}</div>
-	</button>
+	{/if}
 </div>

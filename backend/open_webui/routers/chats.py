@@ -13,7 +13,6 @@ from open_webui.models.chats import (
 )
 from open_webui.models.tags import TagModel, Tags
 from open_webui.models.folders import Folders
-from open_webui.models.knowledge import Knowledges, KnowledgeForm
 
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
@@ -23,11 +22,20 @@ from pydantic import BaseModel
 
 
 import os
+
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.task import get_task_model_id, title_generation_template
 from open_webui.config import UPLOAD_DIR
+from open_webui.models.documents import (
+    Documents,
+)
+from open_webui.models.knowledge_base import (
+    KnowledgeBase,
+    KnowledgeBaseForm,
+)
+
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -426,7 +434,7 @@ async def summarize_chat_by_id(
     try:
         models = request.app.state.MODELS
         task_model_id = get_task_model_id(
-            user.model,
+            user.settings.model,
             request.app.state.config.TASK_MODEL.value,
             request.app.state.config.TASK_MODEL_EXTERNAL.value,
             models,
@@ -461,50 +469,63 @@ async def summarize_chat_by_id(
 
         summary_text = summary_response["choices"][0]["message"]["content"]
 
-        # Create a new knowledge base
-        knowledge_form = KnowledgeForm(
-            name=chat.title,
-            description=f"Summary of chat '{chat.title}'",
-        )
-        knowledge_base = Knowledges.insert_new_knowledge(user.id, knowledge_form)
+        log.info(f"Generated summary for chat {id}: {summary_text[:100]}...")
 
-        if not knowledge_base:
+        # Create a new knowledge base with the chat's title
+        kb_form = KnowledgeBaseForm(name=chat.title)
+        kb = KnowledgeBase.insert_new_knowledge_base(user.id, kb_form)
+        if not kb:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create knowledge base.",
             )
+        log.info(f"Created knowledge base '{kb.name}' with ID {kb.id}")
 
-        # Save the summary to a file and add it to the knowledge base
-        user_docs_dir = UPLOAD_DIR / str(user.id) / "docs"
-        user_docs_dir.mkdir(parents=True, exist_ok=True)
-
-        sanitized_title = "".join(
-            c for c in chat.title if c.isalnum() or c in (" ", "-", "_")
-        ).rstrip()
-        summary_filename = f"{sanitized_title}_summary.txt"
-        summary_filepath = user_docs_dir / summary_filename
-
+        # Save the summary to a temporary file
+        user_temp_dir = UPLOAD_DIR / str(user.id) / "temp"
+        user_temp_dir.mkdir(parents=True, exist_ok=True)
+        summary_filename = f"{chat.id}_summary.txt"
+        summary_filepath = user_temp_dir / summary_filename
         with open(summary_filepath, "w", encoding="utf-8") as f:
             f.write(summary_text)
 
-        # Create a new document
-        from open_webui.routers.documents import (
-            create_document_from_file,
-            add_document_to_knowledge_base,
-        )
+        log.info(f"Saved summary to temporary file: {summary_filepath}")
 
-        doc = create_document_from_file(
-            user, summary_filename, summary_filepath, "text/plain"
-        )
+        # Create a new document from the summary file
+        file_body = {
+            "knowledge_base_id": kb.id,
+            "filename": summary_filename,
+            "title": chat.title,
+        }
+        doc = Documents.insert_new_document(user.id, file_body, summary_filepath)
         if not doc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create document from summary.",
             )
 
-        add_document_to_knowledge_base(knowledge_base.id, doc.id, user)
-
+        log.info(
+            f"Created document '{doc.title}' with ID {doc.id} in knowledge base '{kb.name}'"
+        )
         return True
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ERROR_MESSAGES.DEFAULT(),
+        )
+
+
+############################
+# GetKnowledgeBases
+############################
+
+
+@router.get("/knowledgebases", response_model=list[dict])
+async def get_user_knowledge_bases(user=Depends(get_verified_user)):
+    try:
+        kbs = KnowledgeBase.get_knowledge_bases_by_user_id(user.id)
+        return [{"id": kb.id, "name": kb.name} for kb in kbs]
     except Exception as e:
         log.exception(e)
         raise HTTPException(

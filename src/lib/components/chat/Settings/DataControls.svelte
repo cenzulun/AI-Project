@@ -185,7 +185,6 @@
 					<div class=" self-center text-sm font-medium">{$i18n.t('Export Chats')}</div>
 				</button>
 			{/if}
-
 		</div>
 
 		<hr class=" border-gray-100 dark:border-gray-850" />
