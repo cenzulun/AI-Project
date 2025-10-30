@@ -424,12 +424,19 @@ async def summarize_chat_by_id(
 
     try:
         models = request.app.state.MODELS
-        # Directly use the task model from config, as user.model is not reliable
-        task_model_id = (
-            request.app.state.config.TASK_MODEL
-            if request.app.state.config.TASK_MODEL in models
-            else request.app.state.config.TASK_MODEL_EXTERNAL
-        )
+        # Robust model selection with fallback
+        task_model_id = request.app.state.config.TASK_MODEL
+        if not task_model_id or task_model_id not in models:
+            task_model_id = request.app.state.config.TASK_MODEL_EXTERNAL
+            if not task_model_id or task_model_id not in models:
+                # Fallback to the first available model if no specific task model is configured
+                if models:
+                    task_model_id = next(iter(models))
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="No models available for summarization task.",
+                    )
 
         if not task_model_id or task_model_id not in models:
             raise HTTPException(
