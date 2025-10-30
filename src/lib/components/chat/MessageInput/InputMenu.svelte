@@ -49,6 +49,8 @@
 	let show = false;
 	let tab = '';
 
+	let archived_memories = null;
+
 	let showAttachWebpageModal = false;
 
 	let fileUploadEnabled = true;
@@ -73,6 +75,7 @@
 		if ($knowledge === null) {
 			await knowledge.set(await getKnowledgeBases(localStorage.token));
 		}
+		archived_memories = $knowledge.find((kb) => kb.name === 'Archived Memories');
 	};
 
 	$: if (show) {
@@ -307,6 +310,38 @@
 						</Tooltip>
 					{/if}
 
+					{#if archived_memories}
+						<Tooltip
+							content={fileUploadCapableModels.length !== selectedModels.length
+								? $i18n.t('Model(s) do not support file upload')
+								: !fileUploadEnabled
+									? $i18n.t('You do not have permission to upload files.')
+									: ''}
+							className="w-full"
+						>
+							<button
+								class="flex gap-2 w-full items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl {!fileUploadEnabled
+									? 'opacity-50'
+									: ''}"
+								on:click={() => {
+									tab = 'archived_memories';
+								}}
+							>
+								<Database />
+
+								<div class="flex items-center w-full justify-between">
+									<div class=" line-clamp-1">
+										{$i18n.t('Archived Memories')}
+									</div>
+
+									<div class="text-gray-500">
+										<ChevronRight />
+									</div>
+								</div>
+							</button>
+						</Tooltip>
+					{/if}
+
 					{#if fileUploadEnabled}
 						{#if $config?.features?.enable_google_drive_integration}
 							<DropdownMenu.Item
@@ -509,6 +544,25 @@
 					</button>
 
 					<Chats {onSelect} />
+				</div>
+			{:else if tab === 'archived_memories'}
+				<div in:fly={{ x: 20, duration: 150 }}>
+					<button
+						class="flex w-full justify-between gap-2 items-center px-3 py-1.5 text-sm cursor-pointer rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
+						on:click={() => {
+							tab = '';
+						}}
+					>
+						<ChevronLeft />
+
+						<div class="flex items-center w-full justify-between">
+							<div>
+								{$i18n.t('Archived Memories')}
+							</div>
+						</div>
+					</button>
+
+					<Knowledge ज्ञान={archived_memories} onSelect={onSelect} />
 				</div>
 			{:else if tab === 'microsoft_onedrive'}
 				<div in:fly={{ x: 20, duration: 150 }}>

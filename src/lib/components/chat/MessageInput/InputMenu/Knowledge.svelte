@@ -5,6 +5,7 @@
 	import { knowledge } from '$lib/stores';
 
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
+	import { getFileById } from '$lib/apis/files';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Database from '$lib/components/icons/Database.svelte';
@@ -14,17 +15,19 @@
 	const i18n = getContext('i18n');
 
 	export let onSelect = (e) => {};
+	export let ज्ञान = undefined; // Pronounced "gyan," meaning knowledge in Hindi
 
 	let loaded = false;
 	let items = [];
 	let selectedIdx = 0;
 
 	onMount(async () => {
-		if ($knowledge === null) {
+		const data = ज्ञान ? [ज्ञान] : $knowledge;
+		if (data === null) {
 			await knowledge.set(await getKnowledgeBases(localStorage.token));
 		}
 
-		let legacy_documents = $knowledge
+		let legacy_documents = data
 			.filter((item) => item?.meta?.document)
 			.map((item) => ({
 				...item,
@@ -59,7 +62,7 @@
 					]
 				: [];
 
-		let collections = $knowledge
+		let collections = data
 			.filter((item) => !item?.meta?.document)
 			.map((item) => ({
 				...item,
@@ -67,9 +70,9 @@
 			}));
 		``;
 		let collection_files =
-			$knowledge.length > 0
+			data.length > 0
 				? [
-						...$knowledge
+						...data
 							.reduce((a, item) => {
 								return [
 									...new Set([
@@ -115,9 +118,15 @@
 					? ' bg-gray-50 dark:bg-gray-800 dark:text-gray-100 selected-command-option-button'
 					: ''}"
 				type="button"
-				on:click={() => {
+				on:click={async () => {
 					console.log(item);
-					onSelect(item);
+					if (item.type === 'file') {
+						const file = await getFileById(localStorage.token, item.id);
+						const content = new TextDecoder('utf-8').decode(file);
+						onSelect({ ...item, content });
+					} else {
+						onSelect(item);
+					}
 				}}
 				on:mousemove={() => {
 					selectedIdx = idx;

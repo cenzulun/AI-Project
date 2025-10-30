@@ -11,8 +11,12 @@ from open_webui.models.chats import (
     Chats,
     ChatTitleIdResponse,
 )
-from open_webui.models.tags import TagModel, Tags
+from open_webui.models.files import FileForm, Files
 from open_webui.models.folders import Folders
+from open_webui.models.knowledge import KnowledgeForm, Knowledges
+from open_webui.models.tags import TagModel, Tags
+from open_webui.routers.retrieval import ProcessFileForm, process_file
+import uuid
 
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
@@ -424,12 +428,10 @@ async def summarize_chat_by_id(
 
     try:
         models = request.app.state.MODELS
-        # Robust model selection with fallback
         task_model_id = request.app.state.config.TASK_MODEL
         if not task_model_id or task_model_id not in models:
             task_model_id = request.app.state.config.TASK_MODEL_EXTERNAL
             if not task_model_id or task_model_id not in models:
-                # Fallback to the first available model if no specific task model is configured
                 if models:
                     task_model_id = next(iter(models))
                 else:
@@ -438,47 +440,70 @@ async def summarize_chat_by_id(
                         detail="No models available for summarization task.",
                     )
 
-        if not task_model_id or task_model_id not in models:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Task model '{task_model_id}' not found or is not available.",
-            )
-
         messages = chat.chat["messages"]
-
         # Prepare the summarization prompt
         summarization_prompt = title_generation_template(
-            "### Task:\nSummarize the following conversation in a concise and informative way. Extract key points, decisions, and action items. The summary should be suitable for long-term storage and retrieval as a knowledge base document.\n\n### Chat History:\n<chat_history>\n{{MESSAGES}}\n</chat_history>\n\n### Summary:",
+            "### Task:\nSummarize the following conversation, learn its writing style, and save it to the knowledge base. Extract key points, decisions, and action items. The summary should be suitable for long-term storage and retrieval.\n\n### Chat History:\n<chat_history>\n{{MESSAGES}}\n</chat_history>\n\n### Summary:",
             messages,
         )
 
         form_data = {
             "model": task_model_id,
-            "messages": [
-                {"role": "user", "content": summarization_prompt},
-            ],
+            "messages": [{"role": "user", "content": summarization_prompt}],
             "stream": False,
         }
 
-        # Generate the summary
         summary_response = await generate_chat_completion(
             request, form_data, user, bypass_filter=True
         )
-
         summary_text = summary_response["choices"][0]["message"]["content"]
 
-        # Save the summary to a file
-        user_docs_dir = UPLOAD_DIR / str(user.id) / "docs"
-        user_docs_dir.mkdir(parents=True, exist_ok=True)
+        # Find or create the "Archived Memories" knowledge base
+        knowledge_bases = Knowledges.get_knowledge_bases_by_user_id(user.id)
+        archive_kb = next(
+            (kb for kb in knowledge_bases if kb.name == "Archived Memories"), None
+        )
 
+        if not archive_kb:
+            archive_kb = Knowledges.insert_new_knowledge(
+                user.id,
+                KnowledgeForm(
+                    name="Archived Memories",
+                    description="A collection of summarized chat conversations.",
+                ),
+            )
+
+        # Create a file in memory with the summary
         sanitized_title = "".join(
             c for c in chat.title if c.isalnum() or c in (" ", "-", "_")
         ).rstrip()
         summary_filename = f"{sanitized_title}_summary.txt"
-        summary_filepath = user_docs_dir / summary_filename
 
-        with open(summary_filepath, "w", encoding="utf-8") as f:
-            f.write(summary_text)
+        # Create a new file in the database
+        file_form = FileForm(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            filename=summary_filename,
+            content=summary_text.encode(),
+            size=len(summary_text),
+            type="text/plain",
+        )
+        file = Files.insert_new_file(user.id, file_form)
+
+        # Process the file and add it to the knowledge base
+        process_file(
+            request,
+            ProcessFileForm(file_id=file.id, collection_name=archive_kb.id),
+            user,
+        )
+
+        # Link the file to the knowledge base
+        data = archive_kb.data or {}
+        file_ids = data.get("file_ids", [])
+        if file.id not in file_ids:
+            file_ids.append(file.id)
+            data["file_ids"] = file_ids
+            Knowledges.update_knowledge_data_by_id(id=archive_kb.id, data=data)
 
         return True
     except Exception as e:

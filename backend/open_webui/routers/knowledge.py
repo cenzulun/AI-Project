@@ -27,6 +27,7 @@ from open_webui.utils.access_control import has_access, has_permission
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.models.models import Models, ModelForm
+from open_webui.routers.notes import get_notes
 
 
 log = logging.getLogger(__name__)
@@ -85,6 +86,14 @@ async def get_knowledge(user=Depends(get_verified_user)):
         )
 
     return knowledge_with_files
+
+
+@router.get("/all", response_model=list[KnowledgeUserResponse])
+async def get_all_knowledge_and_notes(user=Depends(get_verified_user)):
+    # The new recommended endpoint is `GET /` which provides more comprehensive details.
+    knowledge_bases = await get_knowledge(user)
+    notes = await get_notes(user)
+    return knowledge_bases + notes
 
 
 @router.get("/list", response_model=list[KnowledgeUserResponse])
