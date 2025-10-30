@@ -426,9 +426,9 @@ async def summarize_chat_by_id(
         models = request.app.state.MODELS
         # Directly use the task model from config, as user.model is not reliable
         task_model_id = (
-            request.app.state.config.TASK_MODEL.value
-            if request.app.state.config.TASK_MODEL.value in models
-            else request.app.state.config.TASK_MODEL_EXTERNAL.value
+            request.app.state.config.TASK_MODEL
+            if request.app.state.config.TASK_MODEL in models
+            else request.app.state.config.TASK_MODEL_EXTERNAL
         )
 
         if not task_model_id or task_model_id not in models:
