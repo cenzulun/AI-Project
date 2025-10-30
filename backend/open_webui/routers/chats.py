@@ -482,6 +482,33 @@ async def summarize_chat_by_id(
         )
 
 
+############################
+# GetChatsByTags
+############################
+
+
+class TagForm(BaseModel):
+    name: str
+
+
+class TagFilterForm(TagForm):
+    skip: Optional[int] = 0
+    limit: Optional[int] = 50
+
+
+@router.post("/tags", response_model=list[ChatTitleIdResponse])
+async def get_user_chat_list_by_tag_name(
+    form_data: TagFilterForm, user=Depends(get_verified_user)
+):
+    chats = Chats.get_chat_list_by_user_id_and_tag_name(
+        user.id, form_data.name, form_data.skip, form_data.limit
+    )
+    if len(chats) == 0:
+        Tags.delete_tag_by_name_and_user_id(form_data.name, user.id)
+
+    return chats
+
+
 class TagForm(BaseModel):
     name: str
 
