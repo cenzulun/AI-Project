@@ -482,11 +482,6 @@ async def summarize_chat_by_id(
         )
 
 
-############################
-# GetChatsByTags
-############################
-
-
 class TagForm(BaseModel):
     name: str
 
